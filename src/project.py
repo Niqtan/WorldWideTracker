@@ -34,7 +34,7 @@ class Log:
             "date_and_time": self.date_and_time
             })
             print("Logged Successfully!") #Calling the function itself will create another database
-            post_prompt = Menu("Would you like to return back to the main menu? (Y/N) ")
+            post_prompt = Menu("Would you like to return back to the main menu? (Y/N): ")
             post_prompt.post_prompt()
             return "Logged Successfully!"
 
