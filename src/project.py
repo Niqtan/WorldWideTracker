@@ -12,7 +12,7 @@ from tabulate import tabulate
 
 #Global Variables here:
 class Log:
-    def __init__(self, food=None, calories=0, serving_size='100g',
+    def __init__(self, food=None, calories=0, serving_size='200g',
                 date=datetime.today().strftime('%Y-%m-%d'),
                 time=datetime.today().strftime('%H:%M:%S'),
                 date_and_time=datetime.today().strftime('%Y-%m-%d %H:%M:%S')):
