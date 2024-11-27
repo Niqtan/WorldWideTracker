@@ -144,7 +144,7 @@ url = "https://api.nal.usda.gov/fdc/v1/foods/search"
 #USDA API database here
 def load_config(name, data_type):
     response = requests.get(
-        url, params={"query": f"{name}", "dataType": data_type, "pageSize": 3,  "api_key": "ZT0avMmfcgYl3M6zz213freLPeCvBZnxegp0j7XD"})
+        url, params={"query": f"{name}", "dataType": data_type, "pageSize": 3,  "api_key": "xx"})
     #Use Parameters in order to filter out results
 
     #Use .json to open get the data
