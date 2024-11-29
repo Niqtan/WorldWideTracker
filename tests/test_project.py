@@ -2,12 +2,12 @@ from unittest import mock
 import pytest
 
 #Functions to import
-from src.project import set_goals, recommend_goals, load_main_config, load_branded_config, food_log, load_database_1_days, view_meals, barcode_scanner
+from WorldWideTracker.src.project import set_goals, recommend_goals, load_main_config, load_branded_config, food_log, load_database_1_days, view_meals, barcode_scanner
 #Classes to import
-from src.project import Log, Menu, Meal
+from WorldWideTracker.src.project import Log, Menu, Meal
 #Integration Testing
 import psycopg2
-from src.config import config
+from WorldWideTracker.src.config import config
 
 
 @pytest.fixture
