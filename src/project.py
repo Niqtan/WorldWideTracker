@@ -5,14 +5,19 @@ from config import config
 import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
+from dotenv import load_dotenv
+
 #Quality of Life:
 from rich import print as rprint
 import questionary
 from tabulate import tabulate
 
+load_dotenv()
+API_KEY = os.getenv('API_KEY')
+
 #Global Variables here:
 class Log:
-    def __init__(self, food=None, calories=0, serving_size='200g',
+    def __init__(self, food=None, calories=0, serving_size='100g',
                 date=datetime.today().strftime('%Y-%m-%d'),
                 time=datetime.today().strftime('%H:%M:%S'),
                 date_and_time=datetime.today().strftime('%Y-%m-%d %H:%M:%S')):
@@ -144,7 +149,7 @@ url = "https://api.nal.usda.gov/fdc/v1/foods/search"
 #USDA API database here
 def load_config(name, data_type):
     response = requests.get(
-        url, params={"query": f"{name}", "dataType": data_type, "pageSize": 3,  "api_key": "ZT0avMmfcgYl3M6zz213freLPeCvBZnxegp0j7XD"})
+        url, params={"query": f"{name}", "dataType": data_type, "pageSize": 3,  "api_key": API_KEY })
     #Use Parameters in order to filter out results
 
     #Use .json to open get the data
@@ -188,6 +193,12 @@ def load_database(delete_query, select_query):
                 calorie numeric(6, 2),
                 date_meal time);
             """)        
+        crsr.execute("""
+            CREATE TABLE IF NOT EXISTS food_data_30_days (
+            meal_logged varchar(100),
+            serving varchar(25),
+            calorie numeric(6, 2));             
+        """)
 
         crsr.execute(select_query)
         food_data_result = crsr.fetchall()
@@ -196,23 +207,31 @@ def load_database(delete_query, select_query):
         crsr.execute(
             delete_query
         )
-
-        limit_food_data_result = food_data_result[:6]
-
         
-        print(tabulate(limit_food_data_result, headers=header, tablefmt="grid"))
-
         crsr.execute("""
                 CREATE TABLE IF NOT EXISTS calorie_goals3(
                     recommended_calories numeric(6,2)
                 );
-        """) 
-
-        connection.commit()
+        """)
         
-        #Logic for flipping through the pages
-        page_counter = 0
+        connection.commit()
+
+        page_counter = 1
+        rows_per_page = 6
+        
+        #Mostly used variables should be outside to avoid resetting values
+        #And updates instead of RESETTING back to their original values
         while True:
+            start_page = (page_counter - 1) * rows_per_page 
+            end_page = start_page + rows_per_page 
+
+            limit_food_data_result = food_data_result[start_page:end_page]
+            
+            if page_counter > 0 and len(food_data_result) + 6 > end_page:
+                print(tabulate(limit_food_data_result, headers=header, tablefmt="grid"))
+            else:
+                print("No more pages to show.")
+
             page_questionare = questionary.select(
                 " == Logged Meals == ",
                 choices = ["1. Next Page", "2. Back Page", "3. Back to view"]
@@ -225,7 +244,10 @@ def load_database(delete_query, select_query):
                         page_counter -= 1
                 case "3. Back to view":
                     view_meals()
-            break
+
+        
+        #Logic for flipping through the pages
+            
         #Calorie Goals
     except(Exception, psycopg2.DatabaseError) as error:
         print(error)
@@ -240,7 +262,7 @@ def load_database(delete_query, select_query):
 
 def load_database_1_days():
     return load_database("DELETE FROM food_data WHERE date_meal > (NOW() + INTERVAL '24 HOURS')::time",
-                         "SELECT meal_logged, serving, calorie, date_meal FROM food_data;")
+                         "SELECT meal_logged, serving, calorie, date_meal FROM food_data ORDER BY date_meal DESC;")
     #Basically says: if the meal logged at a certain time is earlier than the time
     #now minus 24 hours, then it will delete the food_data table
 
@@ -248,12 +270,12 @@ def load_database_1_days():
     # days and 30 days delete the food data anyways
 
 def load_database_30_days():
-    return load_database("DELETE FROM food_data WHERE date_meal > (NOW() + INTERVAL '720 HOURS')::time",
+    return load_database("DELETE FROM food_data_30_days WHERE date_and_time::time > (NOW() + INTERVAL '720 HOURS')::time",
                          """SELECT meal_logged, serving, calorie,
-                          CONCAT(month, '-', day, ' ', hour, ':', minute, ':', second) AS date_and_time_logged
-                          FROM food_data;
+                          CONCAT(LPAD(month::varchar(15), 2, '0'), '-', LPAD(day::varchar(15), 2, '0'), ' ', LPAD(hour::varchar(15), 2 ,'0'), ':', LPAD(minute::varchar(15), 2, '0'), ':', LPAD(second::varchar(15), 2, '0')) AS date_and_time_logged
+                          FROM food_data_30_days
+                          ORDER BY date_and_time_logged DESC;
                           """)
-
 def put_database():
     connection = None
     params = config()
@@ -263,16 +285,25 @@ def put_database():
         #Checks if the cursor is connecting
 
     crsr = connection.cursor()
-    table_name = "food_data"
+    table1 = "food_data"
+    table2 = "food_data_30_days"
 
-    full_query = f"INSERT INTO {table_name} VALUES (%s, %s, %s, %s, %s, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT);"
+    if table1:
+        full_query = f"INSERT INTO {table1} VALUES (%s, %s, %s, %s);"
+        for entry in food_entries:
+            crsr.execute(
+                full_query, (entry['food'], entry['serving_size'], entry['calories'], entry['time'])
+            )
+        crsr.execute("SELECT * FROM food_data;")
 
-    #Wont work if we simpl put the function names as conditionals
-    for entry in food_entries:
-        crsr.execute(
-            full_query, (entry['food'], entry['serving_size'], entry['calories'], entry['time'], entry['date_and_time'])
-        )
-    crsr.execute("SELECT * FROM food_data;")
+    if table2:
+        full_query2 = f"INSERT INTO {table2} VALUES (%s, %s, %s, %s, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT);"
+        for entry in food_entries:
+            crsr.execute(
+                full_query2, (entry['food'], entry['serving_size'], entry['calories'], entry['date_and_time'])
+            )
+        crsr.execute("SELECT * FROM food_data_30_days;")
+    
     connection.commit()
 #Logging a meal wit the USDA
 def food_log():
@@ -364,27 +395,18 @@ def view_meals():
 
     match questionare:
         case "1. Today's Meals":
-            print(f"\nLogged Meals as of {log.date}:")
-            load_database_1_days()
+            print(f"Logged Meals as of {log.date}:")
             if goal_calories:
                 total_calories = int(sum(meal.get_meal(crsr)))
-                final_calories = total_calories - int(goal_calories) 
+                final_calories = int(goal_calories) - total_calories
                 if final_calories:
                     if goal_calories > final_calories:
-                        print(f"Remaining Calories for the day: {int(final_calories)}")
-                        print("You're well under your calorie goal... Good job!\n")
+                        print(f"\nRemaining Calories for the day: {int(final_calories)}")
+                        print("You're well under your calorie goal... Good job!")
                     elif goal_calories < final_calories:
                         print(f"You're over {int(final_calories)} calories of your original calorie goal\n")
+            load_database_1_days()
         case "2. Meals in the Last 30 Days":
-                '''
-                Some reminders for tomorrow:
-                1. Fix the logging function of the time and date
-                2. Think over about the food_data and altering columns
-                CREATE VIEW MEALS FOR 30 DAYS COLUMN
-                3. Fix the bug in deleting the query after 24 hours (not deleting)
-                4. Finish up the barcode scanner
-                5. Find for ways to push this to GIThub
-                '''
                 print(f"\nLogged Meals over the past 30 days:")
                 load_database_30_days()
         case "3. Back to Main Menu":
@@ -494,23 +516,20 @@ def barcode_scanner():
         prompt = input("Allow Access to your Camera? (Y/N): ").lower()
         if prompt == "y":
             cap = cv2.VideoCapture(0)
-            cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
-            cap.set(cv2.CAP_PROP_FOCUS, 0)
-
-            print(f"Autofocus: {cap.get(cv2.CAP_PROP_AUTOFOCUS)}")
-            print(f"Set Focus: {cap.get(cv2.CAP_PROP_FOCUS)}")
 
             while True:
                 ret, frame = cap.read()
+                
+                barcode_scan = decode(frame)
 
-                for qr_code in decode(frame):
+                if not barcode_scan:
+                    print("No barcode detected")
 
+                for qr_code in barcode_scan:
+                    
                     #cv2.rectangle(image, (start_point as tuple), (end_point as tuple), color, thickness)
-                    barcodeData = qr_code.data.decode('utf-8')
+                    barcodeData = qr_code.data
                     barcodeType = qr_code.type
-                    pts = np.array([qr_code.polygon], np.int32)
-                    pts = pts.reshape(-1, 1, 2)
-                    cv2.polylines(frame, [pts],True, (255, 0, 255), 5)
 
                     print(f"Found type: {barcodeType} Barcode: {barcodeData}")
 
