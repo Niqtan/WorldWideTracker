@@ -1,12 +1,9 @@
+
 #Functionality
-import requests, psycopg2, random, os
+import requests, psycopg2, os
 from datetime import datetime
 from config import config
-import cv2
-import numpy as np
-from pyzbar.pyzbar import decode
 from dotenv import load_dotenv
-
 #Quality of Life:
 from rich import print as rprint
 import questionary
@@ -29,7 +26,6 @@ class Log:
         self.date_and_time = date_and_time
 
     def log(self):
-        #How to log this?
         if self.food_name and self.calories and self.serving_size:
             food_entries.append({
             "food": self.food_name,
@@ -38,29 +34,28 @@ class Log:
             "time": self.time,
             "date_and_time": self.date_and_time
             })
-            print("Logged Successfully!") #Calling the function itself will create another database
-            post_prompt = Menu("Would you like to return back to the main menu? (Y/N): ")
-            post_prompt.post_prompt()
-            return "Logged Successfully!"
+            print("Logged Successfully!")
+            return "Logged Successfully"
 
     @classmethod
-    def manual(self):
+    def manual(cls):
         while True:
             try:
                 food_name = input("Enter Food name: ")
                 calories = int(input("Enter calories: "))
                 serving_size = input("Enter the serving size: ")
+                time=datetime.today().strftime('%H:%M:%S')
+                date_and_time=datetime.today().strftime('%Y-%m-%d %H:%M:%S')
                 if food_name and calories and serving_size:
                     food_entries.append({
                     "food": food_name,
                     "calories": calories,
                     "serving_size": serving_size,
-                    'time': self.time,
-                    "date_and_time": self.date_and_time,
+                    'time': time,
+                    "date_and_time": date_and_time,
                     })
                     print("Logged Successfully!\n")
-                    post_prompt = Menu("Would you like to return back to the main menu? (Y/N) ")
-                    post_prompt.post_prompt()
+                    return "Logged Successfully"
             except ValueError:
                 print("Please enter a valid prompt.")
                 pass
@@ -71,14 +66,8 @@ class Meal:
 
     def get_meal(self, crsr):
         crsr.execute("SELECT calorie from food_data")
-        #passing in crsr as a parameter is needed here because
-        #Load databases primarily defines this, and passing in crsr here
-        #Makes it so that you are able to execute SQL commands
         self.meal_data = crsr.fetchall()
-        #self.meal_data simply acts as an instance variable and just
-        #used for recycling
         calorie_list = [row[0] for row in self.meal_data]
-        #Basically says, "Get every row from every calorie row in food_data"
         return calorie_list
 
 class Menu:
@@ -95,28 +84,16 @@ class Menu:
                 put_database()
                 food_log()
 
-"""
-If we make time also have date, then that means that changing
-the table on the database would be necessary --> Option 1
-Option 2: Try to find a way to refactor out the code
-in the database function --> Optimal
-Option 3: Create a new function with a new database containing
-all 30 days. However, that would now be separate from the
-new database --> Ton of work
-
-
-Perhaps what we could do is to do option 2
-"""
+        
 food_entries = []
 
-#Basic Menu here
 def main():
     rprint("\n WELCOME TO THE WorldWideTracker! \n")
     rprint("===Making calorie tracking easy===\n")
 
     questions = questionary.select(
         "What do you want to do?",
-        choices=["1. Log your food", "2. View your Log", "3. Set your goals (Receive Reminders as well)", "4. Scan a barcode (For Branded Foods)", "5. Exit"],
+        choices=["1. Log your food", "2. View your Log", "3. Set your goals (Receive Reminders as well)", "4. Exit"],
     ).ask()
 
 
@@ -130,7 +107,6 @@ def main():
                 set_goals()
                 recommend_goals()
                 while True:
-                    #Debug this if this will work...
                     prompt = input("Would you like to return back to the main menu? (Y/N) ").lower()
                     if prompt == "y":
                         main()
@@ -139,23 +115,17 @@ def main():
                         recommend_goals()
                     else:
                         pass
-            case "4. Scan a barcode (For Branded Foods)":
-                barcode_scanner()
-            case "5. Exit":
+            case "4. Exit":
                 exit("Thank you for using the WorldWideTracker!")
 
 url = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
-#USDA API database here
 def load_config(name, data_type):
     response = requests.get(
         url, params={"query": f"{name}", "dataType": data_type, "pageSize": 3,  "api_key": API_KEY })
-    #Use Parameters in order to filter out results
-
-    #Use .json to open get the data
     try:
-        if response.status_code == 200: #Response code 200 to know its True
-            food_data = response.json() #Convert to JSON file which consists of key value pairs
+        if response.status_code == 200: 
+            food_data = response.json() 
             if food_data and food_data.get("totalHits"):
                 print("Looking for this?")
                 return food_data
@@ -173,19 +143,14 @@ def load_branded_config(name):
     return load_config(name, ["Branded"])
 
 def load_database(delete_query, select_query):
-    #Connects the config file (SQL) to the python file
     try:
         connection = None
         params = config()
         connection = psycopg2.connect(**params)
 
 
-        #The cursor allows you to use commands and retrieve results
-        #Checks if the cursor is connecting
-
         crsr = connection.cursor()
 
-        #Food Data
         crsr.execute("""
             CREATE TABLE IF NOT EXISTS food_data (
                 meal_logged varchar(100),
@@ -219,8 +184,6 @@ def load_database(delete_query, select_query):
         page_counter = 1
         rows_per_page = 6
         
-        #Mostly used variables should be outside to avoid resetting values
-        #And updates instead of RESETTING back to their original values
         while True:
             start_page = (page_counter - 1) * rows_per_page 
             end_page = start_page + rows_per_page 
@@ -243,32 +206,18 @@ def load_database(delete_query, select_query):
                     if page_counter > 0:
                         page_counter -= 1
                 case "3. Back to view":
-                    view_meals()
+                    view_meals()        
 
-        
-        #Logic for flipping through the pages
-            
-        #Calorie Goals
     except(Exception, psycopg2.DatabaseError) as error:
         print(error)
     finally:
-        #Allows for cleanup tasks and shows that database connection is closed
-        #if something went wrong with the connection
         if connection is not None:
             crsr.close()
             connection.close()
-        #if connection is not None (Since connection is now
-        # defined via the unpacking of pspcopg2.connect), close the connection
 
 def load_database_1_days():
     return load_database("DELETE FROM food_data WHERE date_meal > (NOW() + INTERVAL '24 HOURS')::time",
                          "SELECT meal_logged, serving, calorie, date_meal FROM food_data ORDER BY date_meal DESC;")
-    #Basically says: if the meal logged at a certain time is earlier than the time
-    #now minus 24 hours, then it will delete the food_data table
-
-    #The deleting of the 30 days function will not work since both the 1
-    # days and 30 days delete the food data anyways
-
 def load_database_30_days():
     return load_database("DELETE FROM food_data_30_days WHERE date_and_time::time > (NOW() + INTERVAL '720 HOURS')::time",
                          """SELECT meal_logged, serving, calorie,
@@ -280,10 +229,7 @@ def put_database():
     connection = None
     params = config()
     connection = psycopg2.connect(**params)
-
-        #The cursor allows you to use commands and retrieve results
-        #Checks if the cursor is connecting
-
+    
     crsr = connection.cursor()
     table1 = "food_data"
     table2 = "food_data_30_days"
@@ -305,7 +251,7 @@ def put_database():
         crsr.execute("SELECT * FROM food_data_30_days;")
     
     connection.commit()
-#Logging a meal wit the USDA
+
 def food_log():
     global food, calorie
     food_results = []
@@ -313,9 +259,20 @@ def food_log():
 
     while True:
         search_food = questionary.text("Log a food (Be specific): ").ask()
-        call_api = load_main_config(search_food)
+        call_api = None
+        while True:
+            branded_or_not = input("Is this food branded? (Y/N): ").lower().strip()
+            if branded_or_not == "y":
+                call_api = load_branded_config(search_food)
+                break
+            elif branded_or_not == "n":
+                call_api = load_main_config(search_food)
+                break
+            else:
+                print("Please input Y/N.")
+
         if call_api != None:
-            for _ in range(1): #Iterate over each food item
+            for _ in range(1):
                 for i, result in enumerate(call_api['foods']):
                         food_results.append(result['description'])
                         for energy in result['foodNutrients']:
@@ -323,8 +280,6 @@ def food_log():
                                 divided_energy = int(energy['value'])
                                 cal_results.append(divided_energy)
                                 rprint(f"{i+1}. {result['description']} ({divided_energy} kcal per 100g)")
-
-                                    #How to return for pytest
             print("4. Can't find what you're looking for? Enter it manually.")
             print("5. Log a new one")
             break
@@ -342,7 +297,7 @@ def food_log():
                 serving_size = "100g"
                 log_instance = Log(food, calorie, serving_size)
                 food_options = {
-                    "1": log_instance.log, #OOP function here to log the food
+                    "1": log_instance.log, 
                     "2": log_instance.log,
                     "3": log_instance.log,
                 }
@@ -355,23 +310,20 @@ def food_log():
                     "5": food_log
                 }
                 food_options[user_input]()
-            else:
-                print("Please choose a valid number.")
+
+
+
+        post_prompt = Menu("Would you like to return back to the main menu? (Y/N): ")
+        post_prompt.post_prompt()
 
 def view_meals():
     meal = Meal()
     log = Log()
-    #Bug: This function is also not working because past calories of a food is # not logged or rather not accounted for when I open a fresh program
     questionare = questionary.select(
         " == Logged Meals == ",
         choices = ["1. Today's Meals", "2. Meals in the Last 30 Days", "3. Back to Main Menu" ],
     ).ask()
 
-    """
-    Initiates the database to be used for loading the data as a
-    visual representation to the user. This is the 2nd part of
-    loading the database for the saving the goal_calories
-    """
 
     params = config()
     connection = psycopg2.connect(**params)
@@ -380,7 +332,7 @@ def view_meals():
     crsr.execute("SELECT recommended_calories FROM calorie_goals3;")
     result_crsr = crsr.fetchone()
 
-    if result_crsr is None: #If no goal calories is found, then prompt if they want to set goals first
+    if result_crsr is None: 
         while True:
             prompt = input("Would you like to set your goals for reminders of your calorie intake? (Y/N): ").lower()
             if prompt == "y":
@@ -391,7 +343,7 @@ def view_meals():
             else:
                 pass
     else:
-        goal_calories = result_crsr[0] #Look through the values of fetchone and assign that value to goal_calories
+        goal_calories = result_crsr[0] 
 
     match questionare:
         case "1. Today's Meals":
@@ -412,15 +364,12 @@ def view_meals():
         case "3. Back to Main Menu":
             main()
 
-    #Add a function for todays meals to display how many calories under
-    #or over the actual goal of calories
-
 goals = {
     "current_weight": None,
     "target_weight": None,
     "activity_level": None
 }
-#Setting/Updating Goals
+
 def set_goals():
     questions = ["Current Weight (kg): ", "Target Weight (kg): ", "Activity Level: "]
     responses = []
@@ -480,8 +429,6 @@ def recommend_goals():
         elif reminder_prompt == "n":
             print("No problem! Let us know if you change your mind.")
             goal_calories = None
-            #If picked "n", it doesnt follow the reminder
-            #Meaning that if I picked n, it will still display the calories.
             break
         else:
             print("Invalid Input. Please enter Y or N")
@@ -493,7 +440,6 @@ def recommend_goals():
     for loading that data which is defined in the view_meals
     """
     params = config()
-    #Config file makes your code more clean
     connection = psycopg2.connect(**params)
     crsr = connection.cursor()
     if goal_calories is not None:
@@ -502,73 +448,12 @@ def recommend_goals():
         SET recommended_calories = (%s);
         """
         crsr.execute(query, (goal_calories,))
-        #Updates the table for none first-timers and sets the row a new value
-        #depending on goal_calories
         connection.commit()
 
     crsr.close()
     connection.close()
 
     return goal_calories
-
-def barcode_scanner():
-    while True:
-        prompt = input("Allow Access to your Camera? (Y/N): ").lower()
-        if prompt == "y":
-            cap = cv2.VideoCapture(0)
-
-            while True:
-                ret, frame = cap.read()
-                
-                barcode_scan = decode(frame)
-
-                if not barcode_scan:
-                    print("No barcode detected")
-
-                for qr_code in barcode_scan:
-                    
-                    #cv2.rectangle(image, (start_point as tuple), (end_point as tuple), color, thickness)
-                    barcodeData = qr_code.data
-                    barcodeType = qr_code.type
-
-                    print(f"Found type: {barcodeType} Barcode: {barcodeData}")
-
-                    """
-                    What to do:
-                    1. Use the pyzbar in order to detect QR codes
-                    2. Get the data from these qr codes and search it in the API
-                    3. Using the API, if detected, then say "Logged successfully", if not then prompt the user again
-                    4. Make sure this barcode function has great error detecting skillz
-                    """
-                    #Continue on with this
-                    ''' Known methods for implementation:
-                    1. Calculate the rectangular position of the barcode (x,y) as a tuple
-                    2. The problem still persists: How do I get the data from the barcode? (Data is already in the qr code)
-                    3. Either use cv2.rectangle method
-                    '''
-                    #We want to first identify the barcode and its rectangular position
-                    #Then, we go and get the data from that and print it
-                    #Log it as well
-                    #load_branded_config
-                    #print("Detected! Found {}")
-
-                cv2.imshow('QR Code Scanner', frame)
-                if not ret:
-                    print("Could not open webcam.")
-                    continue
-
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-
-            cap.release()
-            cv2.destroyAllWindows()
-            main()
-        elif prompt == "n":
-            main()
-        else:
-            print("PLEASEE")
-            pass
-
 
 if __name__ == "__main__":
     main()
