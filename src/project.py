@@ -352,11 +352,11 @@ def view_meals():
                 total_calories = int(sum(meal.get_meal(crsr)))
                 final_calories = int(goal_calories) - total_calories
                 if final_calories:
-                    if goal_calories > final_calories:
+                    if goal_calories > total_calories:
                         print(f"\nRemaining Calories for the day: {int(final_calories)}")
                         print("You're well under your calorie goal... Good job!")
-                    elif goal_calories < final_calories:
-                        print(f"You're over {int(final_calories)} calories of your original calorie goal\n")
+                    elif goal_calories < total_calories:
+                        print(f"You're over {int(final_calories) * -1} calories of your original calorie goal\n")
             load_database_1_days()
         case "2. Meals in the Last 30 Days":
                 print(f"\nLogged Meals over the past 30 days:")

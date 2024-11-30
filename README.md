@@ -1,6 +1,6 @@
 
 #  WorldWideTracker
-#### Video Demo:  <URL HERE>
+#### Video Demo:  [<Video Demo>](https://youtu.be/A7b7_jvXuFE)
 #### Description:
 Hey there! Welcome to my personal Python project of mine that simplifies your calorie tracking, no fluff! With easy calorie tracking, easy goal setting, and even the ability  to see your meal logs, WorldWideTracker makes dieting convenient!
 
